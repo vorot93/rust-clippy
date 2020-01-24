@@ -23,14 +23,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for calls of `mem::discriminant()` on a non-enum type.", 
-      "Why is this bad": "The value of `mem::discriminant()` on non-enum types\nis unspecified.", 
+      "What it does": "Checks for explicit bounds checking when casting.", 
+      "Why is this bad": "Reduces the readability of statements & is error prone.", 
       "Known problems": "None.", 
-      "Example": "```rust\nuse std::mem;\n\nmem::discriminant(&\"hello\");\nmem::discriminant(&&Some(2));\n```"
+      "Example": "```rust\nfoo <= i32::max_value() as u32\n```\n\nCould be written:\n\n```rust\ni32::try_from(foo).is_ok()\n```"
     }, 
-    "group": "correctness", 
-    "id": "mem_discriminant_non_enum", 
-    "level": "Deny"
+    "group": "pedantic", 
+    "id": "checked_conversions", 
+    "level": "Allow"
   }, 
   {
     "docs": {
@@ -67,14 +67,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for `foo = bar; bar = foo` sequences.", 
-      "Why is this bad": "This looks like a failed attempt to swap.", 
-      "Known problems": "None.", 
-      "Example": "```rust\na = b;\nb = a;\n```\nCould be written as:\n```rust\nstd::mem::swap(&mut a, &mut b);\n```"
+      "What it does": "Checks for explicit `Clone` implementations for `Copy`\ntypes.", 
+      "Why is this bad": "To avoid surprising behaviour, these traits should\nagree and the behaviour of `Copy` cannot be overridden. In almost all\nsituations a `Copy` type should have a `Clone` implementation that does\nnothing more than copy the object, which is what `#[derive(Copy, Clone)]`\ngets you.", 
+      "Known problems": "Bounds of generic types are sometimes wrong: https://github.com/rust-lang/rust/issues/26925", 
+      "Example": "```rust,ignore\n#[derive(Copy)]\nstruct Foo;\n\nimpl Clone for Foo {\n    // ..\n}\n```"
     }, 
-    "group": "correctness", 
-    "id": "almost_swapped", 
-    "level": "Deny"
+    "group": "pedantic", 
+    "id": "expl_impl_clone_on_copy", 
+    "level": "Allow"
   }, 
   {
     "docs": {
@@ -96,6 +96,17 @@
     }, 
     "group": "restriction", 
     "id": "multiple_inherent_impl", 
+    "level": "Allow"
+  }, 
+  {
+    "docs": {
+      "What it does": "Checks for string appends of the form `x = x + y` (without\n`let`!).", 
+      "Why is this bad": "It's not really bad, but some people think that the\n`.push_str(_)` method is more readable.", 
+      "Known problems": "None.", 
+      "Example": "```rust\nlet mut x = \"Hello\".to_owned();\nx = x + \", World\";\n```"
+    }, 
+    "group": "pedantic", 
+    "id": "string_add_assign", 
     "level": "Allow"
   }, 
   {
@@ -133,24 +144,24 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for equal operands to comparison, logical and\nbitwise, difference and division binary operators (`==`, `>`, etc., `&&`,\n`||`, `&`, `|`, `^`, `-` and `/`).", 
-      "Why is this bad": "This is usually just a typo or a copy and paste error.", 
-      "Known problems": "False negatives: We had some false positives regarding\ncalls (notably [racer](https://github.com/phildawes/racer) had one instance\nof `x.pop() && x.pop()`), so we removed matching any function or method\ncalls. We may introduce a whitelist of known pure functions in the future.", 
-      "Example": "```rust\nif x + 1 == x + 1 {}\n```"
+      "What it does": "Checks for calls to `std::mem::drop` with a reference\ninstead of an owned value.", 
+      "Why is this bad": "Calling `drop` on a reference will only drop the\nreference itself, which is a no-op. It will not call the `drop` method (from\nthe `Drop` trait implementation) on the underlying referenced value, which\nis likely what was intended.", 
+      "Known problems": "None.", 
+      "Example": "```ignore\nlet mut lock_guard = mutex.lock();\nstd::mem::drop(&lock_guard) // Should have been drop(lock_guard), mutex\n// still locked\noperation_that_requires_mutex_to_be_unlocked();\n```"
     }, 
     "group": "correctness", 
-    "id": "eq_op", 
+    "id": "drop_ref", 
     "level": "Deny"
   }, 
   {
     "docs": {
-      "What it does": "This lint warns when you use `print!()` with a format\nstring that\nends in a newline.", 
-      "Why is this bad": "You should use `println!()` instead, which appends the\nnewline.", 
-      "Known problems": "None.", 
-      "Example": "```rust\nprint!(\"Hello {}!\\n\", name);\n```\nuse println!() instead\n```rust\nprintln!(\"Hello {}!\", name);\n```"
+      "What it does": "Checks for useless borrowed references.", 
+      "Why is this bad": "It is mostly useless and make the code look more\ncomplex than it\nactually is.", 
+      "Known problems": "It seems that the `&ref` pattern is sometimes useful.\nFor instance in the following snippet:\n```rust,ignore\nenum Animal {\n    Cat(u64),\n    Dog(u64),\n}\n\nfn foo(a: &Animal, b: &Animal) {\n    match (a, b) {\n        (&Animal::Cat(v), k) | (k, &Animal::Cat(v)) => (), // lifetime mismatch error\n        (&Animal::Dog(ref c), &Animal::Dog(_)) => ()\n    }\n}\n```\nThere is a lifetime mismatch error for `k` (indeed a and b have distinct\nlifetime).\nThis can be fixed by using the `&ref` pattern.\nHowever, the code can also be fixed by much cleaner ways", 
+      "Example": "```rust\nlet mut v = Vec::<String>::new();\nlet _ = v.iter_mut().filter(|&ref a| a.is_empty());\n```\nThis closure takes a reference on something that has been matched as a\nreference and\nde-referenced.\nAs such, it could just be |a| a.is_empty()"
     }, 
-    "group": "style", 
-    "id": "print_with_newline", 
+    "group": "complexity", 
+    "id": "needless_borrowed_reference", 
     "level": "Warn"
   }, 
   {
@@ -196,17 +207,6 @@
     "group": "restriction", 
     "id": "print_stdout", 
     "level": "Allow"
-  }, 
-  {
-    "docs": {
-      "What it does": "Checks for expressions where `std::cmp::min` and `max` are\nused to clamp values, but switched so that the result is constant.", 
-      "Why is this bad": "This is in all probability not the intended outcome. At\nthe least it hurts readability of the code.", 
-      "Known problems": "None", 
-      "Example": "```ignore\nmin(0, max(100, x))\n```\nIt will always be equal to `0`. Probably the author meant to clamp the value\nbetween 0 and 100, but has erroneously swapped `min` and `max`."
-    }, 
-    "group": "correctness", 
-    "id": "min_max", 
-    "level": "Deny"
   }, 
   {
     "docs": {
@@ -949,13 +949,13 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for unnecessary double parentheses.", 
-      "Why is this bad": "This makes code harder to read and might indicate a\nmistake.", 
+      "What it does": "Checks for the doc comments of publicly visible\nunsafe functions and warns if there is no `# Safety` section.", 
+      "Why is this bad": "Unsafe functions should document their safety\npreconditions, so that users can be sure they are using them safely.", 
       "Known problems": "None.", 
-      "Example": "```rust\n((0));\nfoo((0));\n((1, 2));\n```"
+      "Examples": "```rust\n/// This function should really be documented\npub unsafe fn start_apocalypse(u: &mut Universe) {\n    unimplemented!();\n}\n```\n\nAt least write a line about safety:\n\n```rust\n/// # Safety\n///\n/// This function should not be called before the horsemen are ready.\npub unsafe fn start_apocalypse(u: &mut Universe) {\n    unimplemented!();\n}\n```"
     }, 
-    "group": "complexity", 
-    "id": "double_parens", 
+    "group": "style", 
+    "id": "missing_safety_doc", 
     "level": "Warn"
   }, 
   {
@@ -1132,14 +1132,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for usage of `write!()` / `writeln()!` which can be\nreplaced with `(e)print!()` / `(e)println!()`", 
-      "Why is this bad": "Using `(e)println! is clearer and more concise", 
-      "Known problems": "None.", 
-      "Example": "```rust\n// this would be clearer as `eprintln!(\"foo: {:?}\", bar);`\nwriteln!(&mut std::io::stderr(), \"foo: {:?}\", bar).unwrap();\n```"
+      "What it does": "Checks for usage of `_.find(_).map(_)`.", 
+      "Why is this bad": "Readability, this can be written more concisely as a\nsingle method call.", 
+      "Known problems": "Often requires a condition + Option/Iterator creation\ninside the closure.", 
+      "Example": "```rust\n (0..3).find(|x| *x == 2).map(|x| x * 2);\n```\nCan be written as\n```rust\n (0..3).find_map(|x| if x == 2 { Some(x * 2) } else { None });\n```"
     }, 
-    "group": "complexity", 
-    "id": "explicit_write", 
-    "level": "Warn"
+    "group": "pedantic", 
+    "id": "find_map", 
+    "level": "Allow"
   }, 
   {
     "docs": {
@@ -1220,13 +1220,13 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for useless borrowed references.", 
-      "Why is this bad": "It is mostly useless and make the code look more\ncomplex than it\nactually is.", 
-      "Known problems": "It seems that the `&ref` pattern is sometimes useful.\nFor instance in the following snippet:\n```rust,ignore\nenum Animal {\n    Cat(u64),\n    Dog(u64),\n}\n\nfn foo(a: &Animal, b: &Animal) {\n    match (a, b) {\n        (&Animal::Cat(v), k) | (k, &Animal::Cat(v)) => (), // lifetime mismatch error\n        (&Animal::Dog(ref c), &Animal::Dog(_)) => ()\n    }\n}\n```\nThere is a lifetime mismatch error for `k` (indeed a and b have distinct\nlifetime).\nThis can be fixed by using the `&ref` pattern.\nHowever, the code can also be fixed by much cleaner ways", 
-      "Example": "```rust\nlet mut v = Vec::<String>::new();\nlet _ = v.iter_mut().filter(|&ref a| a.is_empty());\n```\nThis closure takes a reference on something that has been matched as a\nreference and\nde-referenced.\nAs such, it could just be |a| a.is_empty()"
+      "What it does": "This lint warns when you use `print!()` with a format\nstring that\nends in a newline.", 
+      "Why is this bad": "You should use `println!()` instead, which appends the\nnewline.", 
+      "Known problems": "None.", 
+      "Example": "```rust\nprint!(\"Hello {}!\\n\", name);\n```\nuse println!() instead\n```rust\nprintln!(\"Hello {}!\", name);\n```"
     }, 
-    "group": "complexity", 
-    "id": "needless_borrowed_reference", 
+    "group": "style", 
+    "id": "print_with_newline", 
     "level": "Warn"
   }, 
   {
@@ -1450,12 +1450,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Nothing. This lint has been deprecated.", 
-      "Deprecation reason": "This lint has been superseded by #[must_use] in rustc."
+      "What it does": "it lints if an exported function, method, trait method with default impl,\nor trait method impl is not `#[inline]`.", 
+      "Why is this bad": "In general, it is not. Functions can be inlined across\ncrates when that's profitable as long as any form of LTO is used. When LTO is disabled,\nfunctions that are not `#[inline]` cannot be inlined across crates. Certain types of crates\nmight intend for most of the methods in their public API to be able to be inlined across\ncrates even when LTO is disabled. For these types of crates, enabling this lint might make\nsense. It allows the crate to require all exported methods to be `#[inline]` by default, and\nthen opt out for specific methods where this might not make sense.", 
+      "Known problems": "None.", 
+      "Example": "```rust\npub fn foo() {} // missing #[inline]\nfn ok() {} // ok\n#[inline] pub fn bar() {} // ok\n#[inline(always)] pub fn baz() {} // ok\n\npub trait Bar {\n  fn bar(); // ok\n  fn def_bar() {} // missing #[inline]\n}\n\nstruct Baz;\nimpl Baz {\n   fn private() {} // ok\n}\n\nimpl Bar for Baz {\n  fn bar() {} // ok - Baz is not exported\n}\n\npub struct PubBaz;\nimpl PubBaz {\n   fn private() {} // ok\n   pub fn not_ptrivate() {} // missing #[inline]\n}\n\nimpl Bar for PubBaz {\n   fn bar() {} // missing #[inline]\n   fn def_bar() {} // missing #[inline]\n}\n```"
     }, 
-    "group": "deprecated", 
-    "id": "unused_collect", 
-    "level": "Deprecated"
+    "group": "restriction", 
+    "id": "missing_inline_in_public_items", 
+    "level": "Allow"
   }, 
   {
     "docs": {
@@ -1649,7 +1651,7 @@
   {
     "docs": {
       "What it does": "Checks for unused written/read amount.", 
-      "Why is this bad": "`io::Write::write` and `io::Read::read` are not\nguaranteed to\nprocess the entire buffer. They return how many bytes were processed, which\nmight be smaller\nthan a given buffer's length. If you don't need to deal with\npartial-write/read, use\n`write_all`/`read_exact` instead.", 
+      "Why is this bad": "`io::Write::write(_vectored)` and\n`io::Read::read(_vectored)` are not guaranteed to\nprocess the entire buffer. They return how many bytes were processed, which\nmight be smaller\nthan a given buffer's length. If you don't need to deal with\npartial-write/read, use\n`write_all`/`read_exact` instead.", 
       "Known problems": "Detects only common patterns.", 
       "Example": "```rust,ignore\nuse std::io;\nfn foo<W: io::Write>(w: &mut W) -> io::Result<()> {\n    // must be `w.write_all(b\"foo\")?;`\n    w.write(b\"foo\")?;\n    Ok(())\n}\n```"
     }, 
@@ -1659,13 +1661,13 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for methods with certain name prefixes and which\ndoesn't match how self is taken. The actual rules are:\n\n|Prefix |`self` taken          |\n|-------|----------------------|\n|`as_`  |`&self` or `&mut self`|\n|`from_`| none                 |\n|`into_`|`self`                |\n|`is_`  |`&self` or none       |\n|`to_`  |`&self`               |", 
-      "Why is this bad": "Consistency breeds readability. If you follow the\nconventions, your users won't be surprised that they, e.g., need to supply a\nmutable reference to a `as_..` function.", 
-      "Known problems": "None.", 
-      "Example": "```ignore\nimpl X {\n    fn as_str(self) -> &str {\n        ..\n    }\n}\n```"
+      "What it does": "Checks for usage of the `offset` pointer method with a `usize` casted to an\n`isize`.", 
+      "Why is this bad": "If we\u2019re always increasing the pointer address, we can avoid the numeric\ncast by using the `add` method instead.", 
+      "Known problems": "None", 
+      "Example": "```rust\nlet vec = vec![b'a', b'b', b'c'];\nlet ptr = vec.as_ptr();\nlet offset = 1_usize;\n\nunsafe {\n    ptr.offset(offset as isize);\n}\n```\n\nCould be written:\n\n```rust\nlet vec = vec![b'a', b'b', b'c'];\nlet ptr = vec.as_ptr();\nlet offset = 1_usize;\n\nunsafe {\n    ptr.add(offset);\n}\n```"
     }, 
-    "group": "style", 
-    "id": "wrong_self_convention", 
+    "group": "complexity", 
+    "id": "ptr_offset_with_cast", 
     "level": "Warn"
   }, 
   {
@@ -1737,14 +1739,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for explicit `Clone` implementations for `Copy`\ntypes.", 
-      "Why is this bad": "To avoid surprising behaviour, these traits should\nagree and the behaviour of `Copy` cannot be overridden. In almost all\nsituations a `Copy` type should have a `Clone` implementation that does\nnothing more than copy the object, which is what `#[derive(Copy, Clone)]`\ngets you.", 
-      "Known problems": "Bounds of generic types are sometimes wrong: https://github.com/rust-lang/rust/issues/26925", 
-      "Example": "```rust,ignore\n#[derive(Copy)]\nstruct Foo;\n\nimpl Clone for Foo {\n    // ..\n}\n```"
+      "What it does": "Checks for `foo = bar; bar = foo` sequences.", 
+      "Why is this bad": "This looks like a failed attempt to swap.", 
+      "Known problems": "None.", 
+      "Example": "```rust\na = b;\nb = a;\n```\nCould be written as:\n```rust\nstd::mem::swap(&mut a, &mut b);\n```"
     }, 
-    "group": "pedantic", 
-    "id": "expl_impl_clone_on_copy", 
-    "level": "Allow"
+    "group": "correctness", 
+    "id": "almost_swapped", 
+    "level": "Deny"
   }, 
   {
     "docs": {
@@ -1759,13 +1761,13 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for calls to `std::mem::drop` with a reference\ninstead of an owned value.", 
-      "Why is this bad": "Calling `drop` on a reference will only drop the\nreference itself, which is a no-op. It will not call the `drop` method (from\nthe `Drop` trait implementation) on the underlying referenced value, which\nis likely what was intended.", 
-      "Known problems": "None.", 
-      "Example": "```ignore\nlet mut lock_guard = mutex.lock();\nstd::mem::drop(&lock_guard) // Should have been drop(lock_guard), mutex\n// still locked\noperation_that_requires_mutex_to_be_unlocked();\n```"
+      "What it does": "Checks for equal operands to comparison, logical and\nbitwise, difference and division binary operators (`==`, `>`, etc., `&&`,\n`||`, `&`, `|`, `^`, `-` and `/`).", 
+      "Why is this bad": "This is usually just a typo or a copy and paste error.", 
+      "Known problems": "False negatives: We had some false positives regarding\ncalls (notably [racer](https://github.com/phildawes/racer) had one instance\nof `x.pop() && x.pop()`), so we removed matching any function or method\ncalls. We may introduce a whitelist of known pure functions in the future.", 
+      "Example": "```rust\nif x + 1 == x + 1 {}\n```"
     }, 
     "group": "correctness", 
-    "id": "drop_ref", 
+    "id": "eq_op", 
     "level": "Deny"
   }, 
   {
@@ -2011,13 +2013,13 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for transmutes to the original type of the object\nand transmutes that could be a cast.", 
-      "Why is this bad": "Readability. The code tricks people into thinking that\nsomething complex is going on.", 
+      "What it does": "Checks for methods with certain name prefixes and which\ndoesn't match how self is taken. The actual rules are:\n\n|Prefix |`self` taken          |\n|-------|----------------------|\n|`as_`  |`&self` or `&mut self`|\n|`from_`| none                 |\n|`into_`|`self`                |\n|`is_`  |`&self` or none       |\n|`to_`  |`&self`               |", 
+      "Why is this bad": "Consistency breeds readability. If you follow the\nconventions, your users won't be surprised that they, e.g., need to supply a\nmutable reference to a `as_..` function.", 
       "Known problems": "None.", 
-      "Example": "```rust,ignore\ncore::intrinsics::transmute(t); // where the result type is the same as `t`'s\n```"
+      "Example": "```ignore\nimpl X {\n    fn as_str(self) -> &str {\n        ..\n    }\n}\n```"
     }, 
-    "group": "complexity", 
-    "id": "useless_transmute", 
+    "group": "style", 
+    "id": "wrong_self_convention", 
     "level": "Warn"
   }, 
   {
@@ -2078,14 +2080,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for string appends of the form `x = x + y` (without\n`let`!).", 
-      "Why is this bad": "It's not really bad, but some people think that the\n`.push_str(_)` method is more readable.", 
-      "Known problems": "None.", 
-      "Example": "```rust\nlet mut x = \"Hello\".to_owned();\nx = x + \", World\";\n```"
+      "What it does": "Checks for expressions where `std::cmp::min` and `max` are\nused to clamp values, but switched so that the result is constant.", 
+      "Why is this bad": "This is in all probability not the intended outcome. At\nthe least it hurts readability of the code.", 
+      "Known problems": "None", 
+      "Example": "```ignore\nmin(0, max(100, x))\n```\nIt will always be equal to `0`. Probably the author meant to clamp the value\nbetween 0 and 100, but has erroneously swapped `min` and `max`."
     }, 
-    "group": "pedantic", 
-    "id": "string_add_assign", 
-    "level": "Allow"
+    "group": "correctness", 
+    "id": "min_max", 
+    "level": "Deny"
   }, 
   {
     "docs": {
@@ -2122,14 +2124,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for manual swapping.", 
-      "Why is this bad": "The `std::mem::swap` function exposes the intent better\nwithout deinitializing or copying either variable.", 
-      "Known problems": "None.", 
-      "Example": "```rust\nlet mut a = 42;\nlet mut b = 1337;\n\nlet t = b;\nb = a;\na = t;\n```\nUse std::mem::swap():\n```rust\nlet mut a = 1;\nlet mut b = 2;\nstd::mem::swap(&mut a, &mut b);\n```"
+      "What it does": "Checks for the use of bindings with a single leading\nunderscore.", 
+      "Why is this bad": "A single leading underscore is usually used to indicate\nthat a binding will not be used. Using such a binding breaks this\nexpectation.", 
+      "Known problems": "The lint does not work properly with desugaring and\nmacro, it has been allowed in the mean time.", 
+      "Example": "```rust\nlet _x = 0;\nlet y = _x + 1; // Here we are using `_x`, even though it has a leading\n                // underscore. We should rename `_x` to `x`\n```"
     }, 
-    "group": "complexity", 
-    "id": "manual_swap", 
-    "level": "Warn"
+    "group": "pedantic", 
+    "id": "used_underscore_binding", 
+    "level": "Allow"
   }, 
   {
     "docs": {
@@ -2187,6 +2189,15 @@
   }, 
   {
     "docs": {
+      "What it does": "Nothing. This lint has been deprecated.", 
+      "Deprecation reason": "This lint has been superseded by #[must_use] in rustc."
+    }, 
+    "group": "deprecated", 
+    "id": "unused_collect", 
+    "level": "Deprecated"
+  }, 
+  {
+    "docs": {
       "What it does": "Checks for usage of dbg!() macro.", 
       "Why is this bad": "`dbg!` macro is intended as a debugging tool. It\nshould not be in version control.", 
       "Known problems": "None.", 
@@ -2206,17 +2217,6 @@
     "group": "perf", 
     "id": "expect_fun_call", 
     "level": "Warn"
-  }, 
-  {
-    "docs": {
-      "What it does": "it lints if an exported function, method, trait method with default impl,\nor trait method impl is not `#[inline]`.", 
-      "Why is this bad": "In general, it is not. Functions can be inlined across\ncrates when that's profitable as long as any form of LTO is used. When LTO is disabled,\nfunctions that are not `#[inline]` cannot be inlined across crates. Certain types of crates\nmight intend for most of the methods in their public API to be able to be inlined across\ncrates even when LTO is disabled. For these types of crates, enabling this lint might make\nsense. It allows the crate to require all exported methods to be `#[inline]` by default, and\nthen opt out for specific methods where this might not make sense.", 
-      "Known problems": "None.", 
-      "Example": "```rust\npub fn foo() {} // missing #[inline]\nfn ok() {} // ok\n#[inline] pub fn bar() {} // ok\n#[inline(always)] pub fn baz() {} // ok\n\npub trait Bar {\n  fn bar(); // ok\n  fn def_bar() {} // missing #[inline]\n}\n\nstruct Baz;\nimpl Baz {\n   fn private() {} // ok\n}\n\nimpl Bar for Baz {\n  fn bar() {} // ok - Baz is not exported\n}\n\npub struct PubBaz;\nimpl PubBaz {\n   fn private() {} // ok\n   pub fn not_ptrivate() {} // missing #[inline]\n}\n\nimpl Bar for PubBaz {\n   fn bar() {} // missing #[inline]\n   fn def_bar() {} // missing #[inline]\n}\n```"
-    }, 
-    "group": "restriction", 
-    "id": "missing_inline_in_public_items", 
-    "level": "Allow"
   }, 
   {
     "docs": {
@@ -2307,6 +2307,17 @@
   }, 
   {
     "docs": {
+      "What it does": "Checks for usage of `_.as_ref().map(Deref::deref)` or it's aliases (such as String::as_str).", 
+      "Why is this bad": "Readability, this can be written more concisely as a\nsingle method call.", 
+      "Known problems": "None.", 
+      "Example": "```rust,ignore\n opt.as_ref().map(String::as_str)\n```\nCan be written as\n```rust,ignore\n opt.as_deref()\n```"
+    }, 
+    "group": "complexity", 
+    "id": "option_as_ref_deref", 
+    "level": "Warn"
+  }, 
+  {
+    "docs": {
       "What it does": "Checks for items that implement `.len()` but not\n`.is_empty()`.", 
       "Why is this bad": "It is good custom to have both methods, because for\nsome data structures, asking about the length will be a costly operation,\nwhereas `.is_empty()` can usually answer in constant time. Also it used to\nlead to false positives on the [`len_zero`](#len_zero) lint \u2013 currently that\nlint will ignore such entities.", 
       "Known problems": "None.", 
@@ -2318,13 +2329,13 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for modulo arithemtic.", 
-      "Why is this bad": "The results of modulo (%) operation might differ\ndepending on the language, when negative numbers are involved.\nIf you interop with different languages it might be beneficial\nto double check all places that use modulo arithmetic.\n\nFor example, in Rust `17 % -3 = 2`, but in Python `17 % -3 = -1`.", 
+      "What it does": "Warns if literal suffixes are not separated by an\nunderscore.", 
+      "Why is this bad": "It is much less readable.", 
       "Known problems": "None.", 
-      "Example": "```rust\nlet x = -17 % 3;\n```"
+      "Example": "```rust\nlet y = 123832i32;\n```"
     }, 
-    "group": "restriction", 
-    "id": "modulo_arithmetic", 
+    "group": "pedantic", 
+    "id": "unseparated_literal_suffix", 
     "level": "Allow"
   }, 
   {
@@ -2649,13 +2660,13 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for the doc comments of publicly visible\nunsafe functions and warns if there is no `# Safety` section.", 
-      "Why is this bad": "Unsafe functions should document their safety\npreconditions, so that users can be sure they are using them safely.", 
+      "What it does": "Checks for unnecessary double parentheses.", 
+      "Why is this bad": "This makes code harder to read and might indicate a\nmistake.", 
       "Known problems": "None.", 
-      "Examples": "```rust\n/// This function should really be documented\npub unsafe fn start_apocalypse(u: &mut Universe) {\n    unimplemented!();\n}\n```\n\nAt least write a line about safety:\n\n```rust\n/// # Safety\n///\n/// This function should not be called before the horsemen are ready.\npub unsafe fn start_apocalypse(u: &mut Universe) {\n    unimplemented!();\n}\n```"
+      "Example": "```rust\n((0));\nfoo((0));\n((1, 2));\n```"
     }, 
-    "group": "style", 
-    "id": "missing_safety_doc", 
+    "group": "complexity", 
+    "id": "double_parens", 
     "level": "Warn"
   }, 
   {
@@ -2716,14 +2727,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for usage of `_.find(_).map(_)`.", 
-      "Why is this bad": "Readability, this can be written more concisely as a\nsingle method call.", 
-      "Known problems": "Often requires a condition + Option/Iterator creation\ninside the closure.", 
-      "Example": "```rust\n (0..3).find(|x| *x == 2).map(|x| x * 2);\n```\nCan be written as\n```rust\n (0..3).find_map(|x| if x == 2 { Some(x * 2) } else { None });\n```"
+      "What it does": "Checks for usage of `write!()` / `writeln()!` which can be\nreplaced with `(e)print!()` / `(e)println!()`", 
+      "Why is this bad": "Using `(e)println! is clearer and more concise", 
+      "Known problems": "None.", 
+      "Example": "```rust\n// this would be clearer as `eprintln!(\"foo: {:?}\", bar);`\nwriteln!(&mut std::io::stderr(), \"foo: {:?}\", bar).unwrap();\n```"
     }, 
-    "group": "pedantic", 
-    "id": "find_map", 
-    "level": "Allow"
+    "group": "complexity", 
+    "id": "explicit_write", 
+    "level": "Warn"
   }, 
   {
     "docs": {
@@ -2916,14 +2927,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for casts between numerical types that may\nbe replaced by safe conversion functions.", 
-      "Why is this bad": "Rust's `as` keyword will perform many kinds of\nconversions, including silently lossy conversions. Conversion functions such\nas `i32::from` will only perform lossless conversions. Using the conversion\nfunctions prevents conversions from turning into silent lossy conversions if\nthe types of the input expressions ever change, and make it easier for\npeople reading the code to know that the conversion is lossless.", 
+      "What it does": "Checks for transmutes to the original type of the object\nand transmutes that could be a cast.", 
+      "Why is this bad": "Readability. The code tricks people into thinking that\nsomething complex is going on.", 
       "Known problems": "None.", 
-      "Example": "```rust\nfn as_u64(x: u8) -> u64 {\n    x as u64\n}\n```\n\nUsing `::from` would look like this:\n\n```rust\nfn as_u64(x: u8) -> u64 {\n    u64::from(x)\n}\n```"
+      "Example": "```rust,ignore\ncore::intrinsics::transmute(t); // where the result type is the same as `t`'s\n```"
     }, 
-    "group": "pedantic", 
-    "id": "cast_lossless", 
-    "level": "Allow"
+    "group": "complexity", 
+    "id": "useless_transmute", 
+    "level": "Warn"
   }, 
   {
     "docs": {
@@ -2938,14 +2949,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for the use of bindings with a single leading\nunderscore.", 
-      "Why is this bad": "A single leading underscore is usually used to indicate\nthat a binding will not be used. Using such a binding breaks this\nexpectation.", 
-      "Known problems": "The lint does not work properly with desugaring and\nmacro, it has been allowed in the mean time.", 
-      "Example": "```rust\nlet _x = 0;\nlet y = _x + 1; // Here we are using `_x`, even though it has a leading\n                // underscore. We should rename `_x` to `x`\n```"
+      "What it does": "Checks for manual swapping.", 
+      "Why is this bad": "The `std::mem::swap` function exposes the intent better\nwithout deinitializing or copying either variable.", 
+      "Known problems": "None.", 
+      "Example": "```rust\nlet mut a = 42;\nlet mut b = 1337;\n\nlet t = b;\nb = a;\na = t;\n```\nUse std::mem::swap():\n```rust\nlet mut a = 1;\nlet mut b = 2;\nstd::mem::swap(&mut a, &mut b);\n```"
     }, 
-    "group": "pedantic", 
-    "id": "used_underscore_binding", 
-    "level": "Allow"
+    "group": "complexity", 
+    "id": "manual_swap", 
+    "level": "Warn"
   }, 
   {
     "docs": {
@@ -3283,14 +3294,14 @@
   }, 
   {
     "docs": {
-      "What it does": "Checks for explicit bounds checking when casting.", 
-      "Why is this bad": "Reduces the readability of statements & is error prone.", 
+      "What it does": "Checks for calls of `mem::discriminant()` on a non-enum type.", 
+      "Why is this bad": "The value of `mem::discriminant()` on non-enum types\nis unspecified.", 
       "Known problems": "None.", 
-      "Example": "```rust\nfoo <= i32::max_value() as u32\n```\n\nCould be written:\n\n```rust\ni32::try_from(foo).is_ok()\n```"
+      "Example": "```rust\nuse std::mem;\n\nmem::discriminant(&\"hello\");\nmem::discriminant(&&Some(2));\n```"
     }, 
-    "group": "pedantic", 
-    "id": "checked_conversions", 
-    "level": "Allow"
+    "group": "correctness", 
+    "id": "mem_discriminant_non_enum", 
+    "level": "Deny"
   }, 
   {
     "docs": {
@@ -3371,13 +3382,24 @@
   }, 
   {
     "docs": {
-      "What it does": "Warns if literal suffixes are not separated by an\nunderscore.", 
-      "Why is this bad": "It is much less readable.", 
+      "What it does": "Checks for modulo arithemtic.", 
+      "Why is this bad": "The results of modulo (%) operation might differ\ndepending on the language, when negative numbers are involved.\nIf you interop with different languages it might be beneficial\nto double check all places that use modulo arithmetic.\n\nFor example, in Rust `17 % -3 = 2`, but in Python `17 % -3 = -1`.", 
       "Known problems": "None.", 
-      "Example": "```rust\nlet y = 123832i32;\n```"
+      "Example": "```rust\nlet x = -17 % 3;\n```"
+    }, 
+    "group": "restriction", 
+    "id": "modulo_arithmetic", 
+    "level": "Allow"
+  }, 
+  {
+    "docs": {
+      "What it does": "Checks for casts between numerical types that may\nbe replaced by safe conversion functions.", 
+      "Why is this bad": "Rust's `as` keyword will perform many kinds of\nconversions, including silently lossy conversions. Conversion functions such\nas `i32::from` will only perform lossless conversions. Using the conversion\nfunctions prevents conversions from turning into silent lossy conversions if\nthe types of the input expressions ever change, and make it easier for\npeople reading the code to know that the conversion is lossless.", 
+      "Known problems": "None.", 
+      "Example": "```rust\nfn as_u64(x: u8) -> u64 {\n    x as u64\n}\n```\n\nUsing `::from` would look like this:\n\n```rust\nfn as_u64(x: u8) -> u64 {\n    u64::from(x)\n}\n```"
     }, 
     "group": "pedantic", 
-    "id": "unseparated_literal_suffix", 
+    "id": "cast_lossless", 
     "level": "Allow"
   }, 
   {
@@ -3434,17 +3456,6 @@
     "group": "correctness", 
     "id": "float_cmp", 
     "level": "Deny"
-  }, 
-  {
-    "docs": {
-      "What it does": "Checks for usage of the `offset` pointer method with a `usize` casted to an\n`isize`.", 
-      "Why is this bad": "If we\u2019re always increasing the pointer address, we can avoid the numeric\ncast by using the `add` method instead.", 
-      "Known problems": "None", 
-      "Example": "```rust\nlet vec = vec![b'a', b'b', b'c'];\nlet ptr = vec.as_ptr();\nlet offset = 1_usize;\n\nunsafe {\n    ptr.offset(offset as isize);\n}\n```\n\nCould be written:\n\n```rust\nlet vec = vec![b'a', b'b', b'c'];\nlet ptr = vec.as_ptr();\nlet offset = 1_usize;\n\nunsafe {\n    ptr.add(offset);\n}\n```"
-    }, 
-    "group": "complexity", 
-    "id": "ptr_offset_with_cast", 
-    "level": "Warn"
   }, 
   {
     "docs": {
