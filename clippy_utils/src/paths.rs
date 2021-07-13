@@ -5,6 +5,17 @@
 //! See <https://github.com/rust-lang/rust-clippy/issues/5393> for more information.
 
 pub const ANY_TRAIT: [&str; 3] = ["core", "any", "Any"];
+#[cfg(feature = "metadata-collector-lint")]
+pub const APPLICABILITY: [&str; 2] = ["rustc_lint_defs", "Applicability"];
+#[cfg(feature = "metadata-collector-lint")]
+pub const APPLICABILITY_VALUES: [[&str; 3]; 4] = [
+    ["rustc_lint_defs", "Applicability", "Unspecified"],
+    ["rustc_lint_defs", "Applicability", "HasPlaceholders"],
+    ["rustc_lint_defs", "Applicability", "MaybeIncorrect"],
+    ["rustc_lint_defs", "Applicability", "MachineApplicable"],
+];
+#[cfg(feature = "metadata-collector-lint")]
+pub const DIAGNOSTIC_BUILDER: [&str; 3] = ["rustc_errors", "diagnostic_builder", "DiagnosticBuilder"];
 pub const ARC_PTR_EQ: [&str; 4] = ["alloc", "sync", "Arc", "ptr_eq"];
 pub const ASMUT_TRAIT: [&str; 3] = ["core", "convert", "AsMut"];
 pub const ASREF_TRAIT: [&str; 3] = ["core", "convert", "AsRef"];
@@ -27,7 +38,6 @@ pub const DEFAULT_TRAIT_METHOD: [&str; 4] = ["core", "default", "Default", "defa
 pub const DEREF_MUT_TRAIT_METHOD: [&str; 5] = ["core", "ops", "deref", "DerefMut", "deref_mut"];
 pub const DEREF_TRAIT_METHOD: [&str; 5] = ["core", "ops", "deref", "Deref", "deref"];
 pub const DIR_BUILDER: [&str; 3] = ["std", "fs", "DirBuilder"];
-pub const DISPLAY_FMT_METHOD: [&str; 4] = ["core", "fmt", "Display", "fmt"];
 pub const DISPLAY_TRAIT: [&str; 3] = ["core", "fmt", "Display"];
 pub const DOUBLE_ENDED_ITERATOR: [&str; 4] = ["core", "iter", "traits", "DoubleEndedIterator"];
 pub const DROP: [&str; 3] = ["core", "mem", "drop"];
@@ -39,9 +49,6 @@ pub const F32_EPSILON: [&str; 4] = ["core", "f32", "<impl f32>", "EPSILON"];
 pub const F64_EPSILON: [&str; 4] = ["core", "f64", "<impl f64>", "EPSILON"];
 pub const FILE: [&str; 3] = ["std", "fs", "File"];
 pub const FILE_TYPE: [&str; 3] = ["std", "fs", "FileType"];
-pub const FMT_ARGUMENTS_NEW_V1: [&str; 4] = ["core", "fmt", "Arguments", "new_v1"];
-pub const FMT_ARGUMENTS_NEW_V1_FORMATTED: [&str; 4] = ["core", "fmt", "Arguments", "new_v1_formatted"];
-pub const FMT_ARGUMENTV1_NEW: [&str; 4] = ["core", "fmt", "ArgumentV1", "new"];
 pub const FROM_FROM: [&str; 4] = ["core", "convert", "From", "from"];
 pub const FROM_ITERATOR: [&str; 5] = ["core", "iter", "traits", "collect", "FromIterator"];
 pub const FROM_ITERATOR_METHOD: [&str; 6] = ["core", "iter", "traits", "collect", "FromIterator", "from_iter"];
@@ -71,8 +78,9 @@ pub const ITER_REPEAT: [&str; 5] = ["core", "iter", "sources", "repeat", "repeat
 pub const KW_MODULE: [&str; 3] = ["rustc_span", "symbol", "kw"];
 #[cfg(feature = "internal-lints")]
 pub const LATE_CONTEXT: [&str; 2] = ["rustc_lint", "LateContext"];
+pub const LIBC_STRLEN: [&str; 2] = ["libc", "strlen"];
 pub const LINKED_LIST: [&str; 4] = ["alloc", "collections", "linked_list", "LinkedList"];
-#[cfg(feature = "internal-lints")]
+#[cfg(any(feature = "internal-lints", feature = "metadata-collector-lint"))]
 pub const LINT: [&str; 2] = ["rustc_lint_defs", "Lint"];
 pub const MEM_DISCRIMINANT: [&str; 3] = ["core", "mem", "discriminant"];
 pub const MEM_FORGET: [&str; 3] = ["core", "mem", "forget"];
@@ -101,12 +109,12 @@ pub const PARKING_LOT_RWLOCK_WRITE_GUARD: [&str; 2] = ["parking_lot", "RwLockWri
 pub const PATH_BUF_AS_PATH: [&str; 4] = ["std", "path", "PathBuf", "as_path"];
 pub const PATH_TO_PATH_BUF: [&str; 4] = ["std", "path", "Path", "to_path_buf"];
 pub const PERMISSIONS: [&str; 3] = ["std", "fs", "Permissions"];
-pub const PERMISSIONS_FROM_MODE: [&str; 7] = ["std", "sys", "unix", "ext", "fs", "PermissionsExt", "from_mode"];
+pub const PERMISSIONS_FROM_MODE: [&str; 7] = ["std", "os", "imp", "unix", "fs", "PermissionsExt", "from_mode"];
 pub const POLL: [&str; 4] = ["core", "task", "poll", "Poll"];
 pub const POLL_PENDING: [&str; 5] = ["core", "task", "poll", "Poll", "Pending"];
 pub const POLL_READY: [&str; 5] = ["core", "task", "poll", "Poll", "Ready"];
-pub const PTR_COPY: [&str; 4] = ["core", "intrinsics", "", "copy"];
-pub const PTR_COPY_NONOVERLAPPING: [&str; 4] = ["core", "intrinsics", "", "copy_nonoverlapping"];
+pub const PTR_COPY: [&str; 3] = ["core", "intrinsics", "copy"];
+pub const PTR_COPY_NONOVERLAPPING: [&str; 3] = ["core", "intrinsics", "copy_nonoverlapping"];
 pub const PTR_EQ: [&str; 3] = ["core", "ptr", "eq"];
 pub const PTR_NULL: [&str; 3] = ["core", "ptr", "null"];
 pub const PTR_NULL_MUT: [&str; 3] = ["core", "ptr", "null_mut"];
